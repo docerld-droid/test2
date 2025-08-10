@@ -41,7 +41,9 @@
         "app.html",
         "app.js",
         "app.css",
-        "page-bridge.js"
+        "page-bridge.js",
+        "zones-kpi.js",
+        "zones-kpi.css"
       ],
       "matches": [
         "https://cmp.wildberries.ru/*"
