@@ -64,7 +64,7 @@ function initTheme(){
   const $ = (s)=>document.querySelector(s);
   const $$ = (s)=>Array.from(document.querySelectorAll(s));
 
-  const state = { tab:"all", search:"", filters:{showsMin:null,showsMax:null,clicksMin:null,clicksMax:null,ctrMin:null,ctrMax:null,cpcMin:null,cpcMax:null,costMin:null,costMax:null}, clusters:[], excluded:new Set(), selected:new Set(), from:null, to:null, advertID:null, clusterDict:null, statRows:null };
+  const state = { tab:"all", search:"", filters:{showsMin:null,showsMax:null,clicksMin:null,clicksMax:null,ctrMin:null,ctrMax:null,cpcMin:null,cpcMax:null,costMin:null,costMax:null}, clusters:[], excluded:new Set(), selected:new Set(), from:null, to:null, advertID:null, clusterDict:null, statRows:null, zonesCatalog:null };
   let loadInFlight = false;
   let loadQueued = false;
 
@@ -75,7 +75,6 @@ function initTheme(){
     try{
       const d = ev.detail || {};
       console.debug('[WB-EXT] wbZonesKPI event', d);
-      state.zonesTotal = d.overall || null;
       state.zonesCatalog = d.catalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
       updateZones();
     }catch(e){}
@@ -1130,22 +1129,17 @@ function fillZoneCard(prefix, m){
 function updateZones(){
   try{
     const search = computeSearchTotals();
-    const total = state.zonesTotal || null;
     const catalog = state.zonesCatalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-    let shelves = {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-    if (total){
-      shelves.shows = Math.max(0,(total.shows||0)-(search.shows||0)-(catalog.shows||0));
-      shelves.clicks= Math.max(0,(total.clicks||0)-(search.clicks||0)-(catalog.clicks||0));
-      shelves.cost  = Math.max(0,(total.cost||0)-(search.cost||0)-(catalog.cost||0));
-      shelves.ctr   = shelves.shows ? shelves.clicks/shelves.shows : 0;
-      shelves.cpc   = shelves.clicks ? shelves.cost/shelves.clicks : 0;
-      fillZoneCard('total', total);
-    } else {
-      fillZoneCard('total', {shows:0, clicks:0, cost:0, ctr:0, cpc:0});
-    }
+    const total = {
+      shows: (search.shows||0) + (catalog.shows||0),
+      clicks:(search.clicks||0) + (catalog.clicks||0),
+      cost:  (search.cost||0) + (catalog.cost||0)
+    };
+    total.ctr = total.shows ? total.clicks/total.shows : 0;
+    total.cpc = total.clicks ? total.cost/total.clicks : 0;
+    fillZoneCard('total', total);
     fillZoneCard('search',  search);
     fillZoneCard('catalog', catalog);
-    fillZoneCard('shelves', shelves);
-    console.debug('[WB-EXT] updateZones totals',{search,total,catalog,shelves});
+    console.debug('[WB-EXT] updateZones totals',{search,total,catalog});
   }catch(e){ /* ignore */ }
 }

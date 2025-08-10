@@ -1,4 +1,4 @@
-/* zones-kpi.js — fills 'Итого/Поиск/Каталог/Полки' cards by parsing the XLSX returned by /fullstat */
+/* zones-kpi.js — fills 'Итого/Поиск/Каталог' cards by parsing the XLSX returned by /fullstat */
 (function(){
   const log = (...a)=>console.debug('[WB-EXT][zones-kpi]', ...a);
 
@@ -153,7 +153,7 @@
       clicks += parseNumbers(row[idx.clicks]);
       cost += parseNumbers(row[idx.cost]);
     }
-    const ctr = shows > 0 ? (clicks/shows*100) : 0;
+    const ctr = shows > 0 ? (clicks/shows) : 0;
     const cpc = clicks > 0 ? (cost/clicks) : 0;
     return {shows, clicks, cost, ctr, cpc};
   }
@@ -169,7 +169,7 @@
     if (!el(prefix+'-shows')) return;
     el(prefix+'-shows').textContent   = fmtNum(totals.shows,0);
     el(prefix+'-clicks').textContent  = fmtNum(totals.clicks,0);
-    el(prefix+'-ctr').textContent     = fmtNum(totals.ctr,2) + '%';
+    el(prefix+'-ctr').textContent     = fmtNum(totals.ctr*100,2) + '%';
     el(prefix+'-cpc').textContent     = fmtMoney(totals.cpc);
     el(prefix+'-cost').textContent    = fmtMoney(totals.cost);
   }
@@ -179,11 +179,10 @@
       const sheets = await parseXLSX(buf);
       if (!sheets){ log('parseXLSX returned null'); return; }
       log('sheets found', Object.keys(sheets));
-      let overall=null, search=null, catalog=null, clusterSheet=null;
+      let search=null, catalog=null, clusterSheet=null;
       for (const key in sheets){
         const nm = sheets[key].name.toLowerCase();
         if (nm.includes('каталог')) catalog = sheets[key];
-        if (nm.includes('статистика') && !nm.includes('каталог')) overall = sheets[key];
         if (nm.includes('кластер')) clusterSheet = sheets[key];
       }
       if (!clusterSheet){
@@ -195,19 +194,13 @@
         }
       }
       const res = {};
-      if (overall){
-        const idx = findHeaderIdx(overall.rows[0]||[]);
-        log('overall header idx', idx);
-        res.overall = sumBy(overall.rows, idx);
-      } else {
-        log('overall sheet not found');
-      }
       if (clusterSheet){
         const idx = findHeaderIdx(clusterSheet.rows[0]||[]);
         log('cluster header idx', idx);
         res.search = sumBy(clusterSheet.rows, idx);
       } else {
-        log('cluster sheet not found');
+        log('cluster sheet not found, using zeros');
+        res.search = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
       if (catalog){
         const idx = findHeaderIdx(catalog.rows[0]||[]);
@@ -217,17 +210,13 @@
         log('catalog sheet not found, using zeros');
         res.catalog = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
-      if (!res.overall && res.search){
-        res.overall = {...res.search};
-      }
-      const sh = {
-        shows: (res.overall.shows||0) - (res.search.shows||0) - (res.catalog.shows||0),
-        clicks: (res.overall.clicks||0) - (res.search.clicks||0) - (res.catalog.clicks||0),
-        cost: (res.overall.cost||0) - (res.search.cost||0) - (res.catalog.cost||0)
+      res.overall = {
+        shows: (res.search.shows||0) + (res.catalog.shows||0),
+        clicks: (res.search.clicks||0) + (res.catalog.clicks||0),
+        cost:   (res.search.cost||0) + (res.catalog.cost||0)
       };
-      sh.ctr = sh.shows>0 ? (sh.clicks/sh.shows*100) : 0;
-      sh.cpc = sh.clicks>0 ? (sh.cost/sh.clicks) : 0;
-      res.shelves = sh;
+      res.overall.ctr = res.overall.shows ? (res.overall.clicks/res.overall.shows) : 0;
+      res.overall.cpc = res.overall.clicks ? (res.overall.cost/res.overall.clicks) : 0;
 
       log('computed KPI', res);
       document.dispatchEvent(new CustomEvent('wbZonesKPI', {detail: res}));
@@ -235,7 +224,6 @@
       setTexts('z-total',   res.overall);
       setTexts('z-search',  res.search);
       setTexts('z-catalog', res.catalog);
-      setTexts('z-shelves', res.shelves);
       log('rendered KPI to DOM');
     }catch(e){
       log('computeAndRenderFromXLSX failed', e);
