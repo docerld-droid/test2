@@ -179,11 +179,12 @@
       const sheets = await parseXLSX(buf);
       if (!sheets){ log('parseXLSX returned null'); return; }
       log('sheets found', Object.keys(sheets));
-      let search=null, catalog=null, clusterSheet=null;
+      let search=null, catalog=null, clusterSheet=null, statSheet=null;
       for (const key in sheets){
         const nm = sheets[key].name.toLowerCase();
-        if (nm.includes('каталог')) catalog = sheets[key];
-        if (nm.includes('кластер')) clusterSheet = sheets[key];
+        if (nm.trim()==='статистика') statSheet = sheets[key];
+        else if (nm.includes('каталог')) catalog = sheets[key];
+        else if (nm.includes('кластер') || nm.includes('ключевым')) clusterSheet = sheets[key];
       }
       if (!clusterSheet){
         for (const key in sheets){
@@ -210,20 +211,48 @@
         log('catalog sheet not found, using zeros');
         res.catalog = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
-      res.overall = {
-        shows: (res.search.shows||0) + (res.catalog.shows||0),
-        clicks: (res.search.clicks||0) + (res.catalog.clicks||0),
-        cost:   (res.search.cost||0) + (res.catalog.cost||0)
+      if (statSheet){
+        const idx = findHeaderIdx(statSheet.rows[0]||[]);
+        log('stat header idx', idx);
+        let total = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
+        for (let r=1; r<statSheet.rows.length; r++){
+          const row = statSheet.rows[r];
+          const first = (row[0]||'').toString().toLowerCase();
+          if (first.includes('всего')){
+            total.shows = parseNumbers(row[idx.shows]);
+            total.clicks= parseNumbers(row[idx.clicks]);
+            total.cost  = parseNumbers(row[idx.cost]);
+            total.ctr = total.shows ? total.clicks/total.shows : 0;
+            total.cpc = total.clicks ? total.cost/total.clicks : 0;
+            break;
+          }
+        }
+        res.total = total;
+      } else {
+        log('stat sheet not found, deriving total from search+catalog');
+        res.total = {
+          shows:(res.search.shows||0)+(res.catalog.shows||0),
+          clicks:(res.search.clicks||0)+(res.catalog.clicks||0),
+          cost:(res.search.cost||0)+(res.catalog.cost||0)
+        };
+        res.total.ctr = res.total.shows ? res.total.clicks/res.total.shows : 0;
+        res.total.cpc = res.total.clicks ? res.total.cost/res.total.clicks : 0;
+      }
+      res.shelves = {
+        shows:(res.total.shows||0) - (res.search.shows||0) - (res.catalog.shows||0),
+        clicks:(res.total.clicks||0) - (res.search.clicks||0) - (res.catalog.clicks||0),
+        cost:(res.total.cost||0) - (res.search.cost||0) - (res.catalog.cost||0)
       };
-      res.overall.ctr = res.overall.shows ? (res.overall.clicks/res.overall.shows) : 0;
-      res.overall.cpc = res.overall.clicks ? (res.overall.cost/res.overall.clicks) : 0;
+      res.shelves.ctr = res.shelves.shows ? res.shelves.clicks/res.shelves.shows : 0;
+      res.shelves.cpc = res.shelves.clicks ? res.shelves.cost/res.shelves.clicks : 0;
 
       log('computed KPI', res);
       document.dispatchEvent(new CustomEvent('wbZonesKPI', {detail: res}));
 
-      setTexts('z-total',   res.overall);
+      setTexts('z-total',   res.total);
       setTexts('z-search',  res.search);
       setTexts('z-catalog', res.catalog);
+      setTexts('z-shelves', res.shelves);
       log('rendered KPI to DOM');
     }catch(e){
       log('computeAndRenderFromXLSX failed', e);
