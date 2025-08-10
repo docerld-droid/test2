@@ -74,6 +74,7 @@ function initTheme(){
   document.addEventListener('wbZonesKPI', ev => {
     try{
       const d = ev.detail || {};
+      console.debug('[WB-EXT] wbZonesKPI event', d);
       state.zonesTotal = d.overall || null;
       state.zonesCatalog = d.catalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
       updateZones();
@@ -1145,5 +1146,6 @@ function updateZones(){
     fillZoneCard('search',  search);
     fillZoneCard('catalog', catalog);
     fillZoneCard('shelves', shelves);
+    console.debug('[WB-EXT] updateZones totals',{search,total,catalog,shelves});
   }catch(e){ /* ignore */ }
 }

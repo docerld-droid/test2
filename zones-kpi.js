@@ -177,7 +177,8 @@
   async function computeAndRenderFromXLSX(buf){
     try{
       const sheets = await parseXLSX(buf);
-      if (!sheets) return;
+      if (!sheets){ log('parseXLSX returned null'); return; }
+      log('sheets found', Object.keys(sheets));
       let overall=null, search=null, catalog=null, clusterSheet=null;
       for (const key in sheets){
         const nm = sheets[key].name.toLowerCase();
@@ -196,16 +197,24 @@
       const res = {};
       if (overall){
         const idx = findHeaderIdx(overall.rows[0]||[]);
+        log('overall header idx', idx);
         res.overall = sumBy(overall.rows, idx);
+      } else {
+        log('overall sheet not found');
       }
       if (clusterSheet){
         const idx = findHeaderIdx(clusterSheet.rows[0]||[]);
+        log('cluster header idx', idx);
         res.search = sumBy(clusterSheet.rows, idx);
+      } else {
+        log('cluster sheet not found');
       }
       if (catalog){
         const idx = findHeaderIdx(catalog.rows[0]||[]);
+        log('catalog header idx', idx);
         res.catalog = sumBy(catalog.rows, idx);
       } else {
+        log('catalog sheet not found, using zeros');
         res.catalog = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
       if (!res.overall && res.search){
@@ -220,13 +229,14 @@
       sh.cpc = sh.clicks>0 ? (sh.cost/sh.clicks) : 0;
       res.shelves = sh;
 
+      log('computed KPI', res);
       document.dispatchEvent(new CustomEvent('wbZonesKPI', {detail: res}));
 
       setTexts('z-total',   res.overall);
       setTexts('z-search',  res.search);
       setTexts('z-catalog', res.catalog);
       setTexts('z-shelves', res.shelves);
-      log('rendered KPI', res);
+      log('rendered KPI to DOM');
     }catch(e){
       log('computeAndRenderFromXLSX failed', e);
     }
@@ -238,6 +248,7 @@
     const resp = await origFetch(input, init);
     try{
       if (url && url.includes('/api/v3/fullstat')){
+        log('intercept fullstat fetch', url);
         const clone = resp.clone();
         const buf = await clone.arrayBuffer();
         computeAndRenderFromXLSX(buf);
