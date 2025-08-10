@@ -11,12 +11,12 @@ function showProgress(on){
       bar.style.width = "100%";
       setTimeout(()=>{ if (bar) bar.style.width = "0%"; }, 400);
     }
+  }catch(e){}
+}
 
 // Minimal DOM helpers available globally early
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  }catch(e){}
-}
 
 
 // --- Theme presets ---
@@ -70,6 +70,15 @@ function initTheme(){
 
   let serverExcludedReady = false;  // true после успешного fetchExcludedFromWB()
   let lastServerExcludedCount = 0;
+
+  document.addEventListener('wbZonesKPI', ev => {
+    try{
+      const d = ev.detail || {};
+      state.zonesTotal = d.overall || null;
+      state.zonesCatalog = d.catalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
+      updateZones();
+    }catch(e){}
+  });
 
   
 async function ensureServerSync(advertID){

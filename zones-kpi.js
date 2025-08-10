@@ -1,98 +1,124 @@
-
-// zones-kpi.js — fills 'Итого/Поиск/Каталог/Полки' cards by parsing the XLSX returned by /fullstat
+/* zones-kpi.js — fills 'Итого/Поиск/Каталог/Полки' cards by parsing the XLSX returned by /fullstat */
 (function(){
   const log = (...a)=>console.debug('[WB-EXT][zones-kpi]', ...a);
 
-  // guard
   if (window.__WB_ZONES_KPI_INSTALLED__) return;
   window.__WB_ZONES_KPI_INSTALLED__ = true;
 
-  // tiny XML helper
-  function parseXml(txt){ return new DOMParser().parseFromString(txt, 'application/xml'); }
-  const ACode = 'A'.charCodeAt(0);
-  function colToIdx(ref){
-    // "AB12" -> 27
-    let col = 0;
-    for(let i=0;i<ref.length;i++){
-      const ch = ref.charCodeAt(i);
-      if (ch>=65 && ch<=90){ // A-Z
-        col = col*26 + (ch-ACode+1);
-      } else break;
+  function parseXml(txt){ return new DOMParser().parseFromString(txt,'application/xml'); }
+  const ACode='A'.charCodeAt(0);
+  function colToIdx(ref){ let col=0; for(let i=0;i<ref.length;i++){ const ch=ref.charCodeAt(i); if(ch>=65&&ch<=90) col=col*26+(ch-ACode+1); else break;} return col-1; }
+  function text(el){ return el&&el.textContent?el.textContent.trim():''; }
+
+  async function unzipEntries(buf){
+    const dv=new DataView(buf);
+    function u32(o){ return dv.getUint32(o,true); }
+    function u16(o){ return dv.getUint16(o,true); }
+    const EOCD=0x06054b50, CD=0x02014b50, LFH=0x04034b50;
+    let eocd=-1;
+    for(let i=buf.byteLength-22;i>=0 && i>=buf.byteLength-65557;i--){ if(u32(i)===EOCD){eocd=i; break;} }
+    if(eocd<0) throw new Error('ZIP EOCD not found');
+    const cdSize=u32(eocd+12);
+    const cdOffset=u32(eocd+16);
+    let offset=cdOffset;
+    const entries={};
+    while(offset < cdOffset+cdSize){
+      if(u32(offset)!==CD) break;
+      const compMethod=u16(offset+10);
+      const compSize=u32(offset+20);
+      const fnLen=u16(offset+28);
+      const extraLen=u16(offset+30);
+      const commentLen=u16(offset+32);
+      const lfhOffset=u32(offset+42);
+      const filename=new TextDecoder().decode(new Uint8Array(buf, offset+46, fnLen));
+      if(u32(lfhOffset)!==LFH) throw new Error('ZIP LFH missing');
+      const lf_fnLen=u16(lfhOffset+26);
+      const lf_extraLen=u16(lfhOffset+28);
+      const dataStart=lfhOffset+30+lf_fnLen+lf_extraLen;
+      const compSlice=buf.slice(dataStart, dataStart+compSize);
+      entries[filename]={compMethod,compSlice};
+      offset += 46+fnLen+extraLen+commentLen;
     }
-    return col-1;
+    async function inflateRaw(slice){
+      const stream=new DecompressionStream('deflate-raw');
+      const r=new Response(new Blob([slice]).stream().pipeThrough(stream));
+      return new Uint8Array(await r.arrayBuffer());
+    }
+    async function getText(name){
+      const e=entries[name]; if(!e) return null;
+      if(e.compMethod===0) return new TextDecoder().decode(new Uint8Array(e.compSlice));
+      if(e.compMethod===8) return new TextDecoder().decode(await inflateRaw(e.compSlice));
+      throw new Error('Unsupported compression '+e.compMethod);
+    }
+    return {getText, list:Object.keys(entries)};
   }
-  function text(el){ return el && el.textContent ? el.textContent.trim() : ''; }
 
   async function parseXLSX(buf){
-    if (!window.JSZip){ log('JSZip missing – cannot parse'); return null; }
-    const zip = await JSZip.loadAsync(buf);
-    const get = async (p)=> zip.file(p) ? await zip.file(p).async('string') : null;
-
-    const wbk = parseXml(await get('xl/workbook.xml'));
-    const sstXml = await get('xl/sharedStrings.xml');
+    const {getText} = await unzipEntries(buf);
+    const wbkXml = await getText('xl/workbook.xml');
+    if(!wbkXml) return null;
+    const wbk = parseXml(wbkXml);
+    const sstXml = await getText('xl/sharedStrings.xml');
     const sst = sstXml ? Array.from(parseXml(sstXml).getElementsByTagName('si')).map(si=>{
       const t = si.getElementsByTagName('t')[0];
       return t ? t.textContent : '';
     }) : [];
 
-    // map sheetId -> path and name
     const sheets = {};
     Array.from(wbk.getElementsByTagName('sheet')).forEach(sh=>{
       const name = sh.getAttribute('name') || '';
       const rid = sh.getAttribute('r:id');
-      sheets[rid] = { name };
+      sheets[rid] = {name};
     });
 
-    // relationships to map rid -> sheetN.xml
-    const rels = parseXml(await get('xl/_rels/workbook.xml.rels'));
+    const relsXml = await getText('xl/_rels/workbook.xml.rels');
+    const rels = relsXml ? parseXml(relsXml) : null;
     const rid2path = {};
-    Array.from(rels.getElementsByTagName('Relationship')).forEach(r=>{
-      rid2path[r.getAttribute('Id')] = r.getAttribute('Target');
-    });
+    if(rels){
+      Array.from(rels.getElementsByTagName('Relationship')).forEach(r=>{
+        rid2path[r.getAttribute('Id')] = r.getAttribute('Target');
+      });
+    }
     Object.keys(sheets).forEach(rid=>{
       let p = rid2path[rid];
-      if (p && !p.startsWith('xl/')) p = 'xl/' + p;
+      if(p && !p.startsWith('xl/')) p = 'xl/' + p;
       sheets[rid].path = p;
     });
 
-    // build array by name
     const byName = {};
-    for (const rid in sheets){
-      const {name, path} = sheets[rid];
-      if (!path) continue;
-      const xml = await get(path);
-      if (!xml) continue;
+    for(const rid in sheets){
+      const {name,path} = sheets[rid];
+      if(!path) continue;
+      const xml = await getText(path);
+      if(!xml) continue;
       const doc = parseXml(xml);
       const rows = [];
       Array.from(doc.getElementsByTagName('row')).forEach(row=>{
-        if (!row) return;
-        let arr = [];
+        if(!row) return;
+        let arr=[];
         Array.from(row.getElementsByTagName('c')).forEach(c=>{
-          const t = c.getAttribute('t'); // s (shared), inlineStr, b, n
+          const t = c.getAttribute('t');
           const r = c.getAttribute('r') || 'A1';
           const idx = colToIdx(r);
-          let v = '';
-          let vNode = c.getElementsByTagName('v')[0];
-          if (t === 's'){ // shared string
+          let v='';
+          const vNode = c.getElementsByTagName('v')[0];
+          if(t==='s'){
             const si = vNode ? parseInt(vNode.textContent,10) : NaN;
             v = Number.isFinite(si) ? (sst[si]||'') : '';
-          } else if (t === 'inlineStr'){
+          } else if (t==='inlineStr'){
             const tnode = c.getElementsByTagName('t')[0];
             v = tnode ? tnode.textContent : '';
-          } else { // numeric or general
+          } else {
             v = vNode ? vNode.textContent : '';
           }
-          // place into arr at idx
-          while (arr.length <= idx) arr.push('');
+          while(arr.length <= idx) arr.push('');
           arr[idx] = v;
         });
-        // normalize: trim
-        arr = arr.map(x=> (typeof x === 'string') ? x.trim() : x);
+        arr = arr.map(x => typeof x === 'string' ? x.trim() : x);
         rows.push(arr);
       });
       byName[name.toLowerCase()] = {name, rows};
     }
-
     return byName;
   }
 
@@ -114,7 +140,7 @@
 
   function parseNumbers(v){
     if (v==null) return 0;
-    let s = String(v).replace(/\s+/g,'').replace(' ','').replace(',', '.'); // also handle nbsp
+    let s = String(v).replace(/\s+/g,'').replace('\u00A0','').replace(',', '.');
     let num = parseFloat(s);
     return Number.isFinite(num) ? num : 0;
   }
@@ -135,7 +161,7 @@
   function fmtNum(n, frac=0){
     if (!Number.isFinite(n)) n = 0;
     const s = n.toLocaleString('ru-RU', {maximumFractionDigits: frac, minimumFractionDigits: frac});
-    return s.replace(/\u00A0/g,' '); // no-break space -> regular
+    return s.replace(/\u00A0/g,' ');
   }
   function fmtMoney(n){ return fmtNum(n, 2).replace('.', ','); }
   function setTexts(prefix, totals){
@@ -149,27 +175,24 @@
   }
 
   async function computeAndRenderFromXLSX(buf){
-    try {
+    try{
       const sheets = await parseXLSX(buf);
-      if (!sheets){ return; }
-      // pick sheets
-      let overall = null, search = null, catalog = null, clusterSheet = null;
+      if (!sheets) return;
+      let overall=null, search=null, catalog=null, clusterSheet=null;
       for (const key in sheets){
         const nm = sheets[key].name.toLowerCase();
         if (nm.includes('каталог')) catalog = sheets[key];
         if (nm.includes('статистика') && !nm.includes('каталог')) overall = sheets[key];
         if (nm.includes('кластер')) clusterSheet = sheets[key];
       }
-      // fallback: choose first sheet with "Кластер" in header
       if (!clusterSheet){
         for (const key in sheets){
           const rows = sheets[key].rows;
-          if (rows && rows[0] && rows[0].some(v => String(v).toLowerCase().includes('кластер'))){
+          if (rows && rows[0] && rows[0].some(v=>String(v).toLowerCase().includes('кластер'))){
             clusterSheet = sheets[key]; break;
           }
         }
       }
-      // totals
       const res = {};
       if (overall){
         const idx = findHeaderIdx(overall.rows[0]||[]);
@@ -186,31 +209,29 @@
         res.catalog = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
       if (!res.overall && res.search){
-        // use search as baseline
         res.overall = {...res.search};
       }
-      // shelves = overall - (search+catalog)
       const sh = {
         shows: (res.overall.shows||0) - (res.search.shows||0) - (res.catalog.shows||0),
         clicks: (res.overall.clicks||0) - (res.search.clicks||0) - (res.catalog.clicks||0),
         cost: (res.overall.cost||0) - (res.search.cost||0) - (res.catalog.cost||0)
       };
-      sh.ctr = sh.shows>0? (sh.clicks/sh.shows*100):0;
-      sh.cpc = sh.clicks>0? (sh.cost/sh.clicks):0;
+      sh.ctr = sh.shows>0 ? (sh.clicks/sh.shows*100) : 0;
+      sh.cpc = sh.clicks>0 ? (sh.cost/sh.clicks) : 0;
       res.shelves = sh;
 
-      // render
-      setTexts('z-total', res.overall);
-      setTexts('z-search', res.search);
+      document.dispatchEvent(new CustomEvent('wbZonesKPI', {detail: res}));
+
+      setTexts('z-total',   res.overall);
+      setTexts('z-search',  res.search);
       setTexts('z-catalog', res.catalog);
       setTexts('z-shelves', res.shelves);
       log('rendered KPI', res);
-    } catch (e){
+    }catch(e){
       log('computeAndRenderFromXLSX failed', e);
     }
   }
 
-  // Hook fetch
   const origFetch = window.fetch;
   window.fetch = async function(input, init){
     let url = typeof input === 'string' ? input : (input && input.url);
@@ -224,6 +245,4 @@
     }catch(e){ log('hook error', e); }
     return resp;
   };
-
-  // Also, if app cached the last blob on page (e.g., via link object), try to reuse by listening to custom events if author emits them later.
 })();
