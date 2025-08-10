@@ -176,12 +176,14 @@
 
   async function computeAndRenderFromXLSX(buf){
     try{
+      log('computeAndRenderFromXLSX start', buf.byteLength);
       const sheets = await parseXLSX(buf);
       if (!sheets){ log('parseXLSX returned null'); return; }
       log('sheets found', Object.keys(sheets));
       let search=null, catalog=null, clusterSheet=null, statSheet=null;
       for (const key in sheets){
         const nm = sheets[key].name.toLowerCase();
+        log('check sheet', nm);
         if (nm.trim()==='статистика') statSheet = sheets[key];
         else if (nm.includes('каталог')) catalog = sheets[key];
         else if (nm.includes('кластер') || nm.includes('ключевым')) clusterSheet = sheets[key];
@@ -190,12 +192,14 @@
         for (const key in sheets){
           const rows = sheets[key].rows;
           if (rows && rows[0] && rows[0].some(v=>String(v).toLowerCase().includes('кластер'))){
+            log('fallback cluster sheet', sheets[key].name);
             clusterSheet = sheets[key]; break;
           }
         }
       }
       const res = {};
       if (clusterSheet){
+        log('cluster sheet rows', clusterSheet.rows.length);
         const idx = findHeaderIdx(clusterSheet.rows[0]||[]);
         log('cluster header idx', idx);
         res.search = sumBy(clusterSheet.rows, idx);
@@ -204,6 +208,7 @@
         res.search = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
       if (catalog){
+        log('catalog sheet rows', catalog.rows.length);
         const idx = findHeaderIdx(catalog.rows[0]||[]);
         log('catalog header idx', idx);
         res.catalog = sumBy(catalog.rows, idx);
@@ -212,6 +217,7 @@
         res.catalog = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
       }
       if (statSheet){
+        log('stat sheet rows', statSheet.rows.length);
         const idx = findHeaderIdx(statSheet.rows[0]||[]);
         log('stat header idx', idx);
         let total = {shows:0,clicks:0,cost:0,ctr:0,cpc:0};
@@ -224,6 +230,7 @@
             total.cost  = parseNumbers(row[idx.cost]);
             total.ctr = total.shows ? total.clicks/total.shows : 0;
             total.cpc = total.clicks ? total.cost/total.clicks : 0;
+            log('total row', row);
             break;
           }
         }
@@ -238,13 +245,6 @@
         res.total.ctr = res.total.shows ? res.total.clicks/res.total.shows : 0;
         res.total.cpc = res.total.clicks ? res.total.cost/res.total.clicks : 0;
       }
-      res.shelves = {
-        shows:(res.total.shows||0) - (res.search.shows||0) - (res.catalog.shows||0),
-        clicks:(res.total.clicks||0) - (res.search.clicks||0) - (res.catalog.clicks||0),
-        cost:(res.total.cost||0) - (res.search.cost||0) - (res.catalog.cost||0)
-      };
-      res.shelves.ctr = res.shelves.shows ? res.shelves.clicks/res.shelves.shows : 0;
-      res.shelves.cpc = res.shelves.clicks ? res.shelves.cost/res.shelves.clicks : 0;
 
       log('computed KPI', res);
       document.dispatchEvent(new CustomEvent('wbZonesKPI', {detail: res}));
@@ -252,7 +252,6 @@
       setTexts('z-total',   res.total);
       setTexts('z-search',  res.search);
       setTexts('z-catalog', res.catalog);
-      setTexts('z-shelves', res.shelves);
       log('rendered KPI to DOM');
     }catch(e){
       log('computeAndRenderFromXLSX failed', e);

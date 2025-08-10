@@ -1110,10 +1110,16 @@ async function parseTotalsAndCatalogXLSX(buf){
 
 function computeSearchTotals(){
   const items = (state && state.clusters) ? state.clusters : [];
+  console.debug('[WB-EXT] computeSearchTotals items', items.length);
   const agg = {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-  for (const c of items){ agg.shows += c.shows||0; agg.clicks += c.clicks||0; agg.cost += c.cost||0; }
+  for (const c of items){
+    agg.shows += c.shows||0;
+    agg.clicks += c.clicks||0;
+    agg.cost += c.cost||0;
+  }
   agg.ctr = agg.shows ? agg.clicks/agg.shows : 0;
   agg.cpc = agg.clicks ? agg.cost/agg.clicks : 0;
+  console.debug('[WB-EXT] computeSearchTotals result', agg);
   return agg;
 }
 
@@ -1129,26 +1135,19 @@ function fillZoneCard(prefix, m){
 function updateZones(){
   try{
     const z = state.zones || {};
+    console.debug('[WB-EXT] updateZones raw state.zones', z);
     const search  = z.search  || computeSearchTotals();
     const catalog = z.catalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
     const total   = z.total   || {
-      shows: (search.shows||0) + (catalog.shows||0) + ((z.shelves&&z.shelves.shows)||0),
-      clicks:(search.clicks||0) + (catalog.clicks||0) + ((z.shelves&&z.shelves.clicks)||0),
-      cost:  (search.cost||0) + (catalog.cost||0) + ((z.shelves&&z.shelves.cost)||0)
+      shows: (search.shows||0) + (catalog.shows||0),
+      clicks:(search.clicks||0) + (catalog.clicks||0),
+      cost:  (search.cost||0) + (catalog.cost||0)
     };
     total.ctr = total.shows ? total.clicks/total.shows : 0;
     total.cpc = total.clicks ? total.cost/total.clicks : 0;
-    const shelves = z.shelves || {
-      shows:(total.shows||0)-(search.shows||0)-(catalog.shows||0),
-      clicks:(total.clicks||0)-(search.clicks||0)-(catalog.clicks||0),
-      cost:(total.cost||0)-(search.cost||0)-(catalog.cost||0)
-    };
-    shelves.ctr = shelves.shows ? shelves.clicks/shelves.shows : 0;
-    shelves.cpc = shelves.clicks ? shelves.cost/shelves.clicks : 0;
     fillZoneCard('total',   total);
     fillZoneCard('search',  search);
     fillZoneCard('catalog', catalog);
-    fillZoneCard('shelves', shelves);
-    console.debug('[WB-EXT] updateZones totals',{search,total,catalog,shelves});
+    console.debug('[WB-EXT] updateZones totals',{search,total,catalog});
   }catch(e){ /* ignore */ }
 }
