@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WB Реклама. Дорого</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="zones-kpi.css">
+</head>
+<body>
+  <div class="panel">
+    
+<header class="topbar">
+  <div class="brand">
+    <span class="logo-badge" aria-hidden="true"></span>
+    <span class="brand-name">WB&nbsp;Реклама<span class="brand-dot" aria-hidden="true"></span>&nbsp;Дорого</span>
+  </div>
+  <div class="controls">
+    <span class="lbl">Период</span>
+    <input type="date" id="fromDate">
+    <span class="sep">—</span>
+    <input type="date" id="toDate">
+    <button id="refreshBtn" class="btn primary"><span class="ico">🔄</span>Обновить</button>
+    <button id="syncBtn" class="btn"><span class="ico">🔁</span>Синхронизировать из WB</button>
+    <button id="excludeBtn" class="btn danger" disabled><span class="ico">🧹</span>Исключить фразы</button>
+    <button id="restoreBtn" class="btn" disabled><span class="ico">↩</span>Вернуть</button>
+    <button id="themeBtn" class="btn ghost" title="Клик — сменить палитру · Shift+клик — светлая/тёмная"><span id="themeIcon">🌙</span></button>
+    <button id="closeBtn" class="btn ghost" title="Закрыть"><span class="ico">✖</span></button>
+  </div>
+  <div class="loading-bar" aria-hidden="true"><i id="progressBar"></i></div>
+</header>
+    <div class="row-filters">
+      <button id="fAll" class="chip active">Все <span id="countAll">0</span></button>
+      <button id="fActive" class="chip">Активные <span id="countActive">0</span></button>
+      <button id="fExcluded" class="chip">Исключённые <span id="countExcluded">0</span></button>
+    </div>
+    
+
+    <section class="microcards" aria-label="Сводка за период">
+      <div class="card metric-shows"><div class="t">Показы</div><div class="v" id="m-shows">—</div></div>
+      <div class="card metric-clicks"><div class="t">Клики</div><div class="v" id="m-clicks">—</div></div>
+      <div class="card metric-ctr"><div class="t">CTR</div><div class="v" id="m-ctr">—</div></div>
+      <div class="card metric-cpc"><div class="t">CPC</div><div class="v" id="m-cpc">—</div></div>
+      <div class="card metric-cost"><div class="t">Затраты</div><div class="v" id="m-cost">—</div></div>
+    </section>
+
+    <div class="searchbar"><input id="searchInput" placeholder="Поиск по кластерам (начало слова). !префикс — исключить" /></div>
+
+    <section class="table-wrap">
+      <div id="notice" class="notice" style="display:none"></div>
+      <table id="clustersTable">
+        <thead>
+          <tr class="filters">
+            <th class="check"></th>
+            <th></th>
+            <th><div class="f"><input id="f-shows-min" placeholder="от"><input id="f-shows-max" placeholder="до"></div></th>
+            <th><div class="f"><input id="f-clicks-min" placeholder="от"><input id="f-clicks-max" placeholder="до"></div></th>
+            <th><div class="f"><input id="f-ctr-min" placeholder="от %"><input id="f-ctr-max" placeholder="до %"></div></th>
+            <th><div class="f"><input id="f-cpc-min" placeholder="от"><input id="f-cpc-max" placeholder="до"></div></th>
+            <th><div class="f"><input id="f-cost-min" placeholder="от"><input id="f-cost-max" placeholder="до"></div></th>
+          </tr>
+          <tr class="hdr">
+            <th class="check"><input type="checkbox" id="checkAll"></th>
+            <th>КЛАСТЕР</th>
+            <th>ПОКАЗЫ</th>
+            <th>КЛИКИ</th>
+            <th>CTR</th>
+            <th>CPC</th>
+            <th>ЗАТРАТЫ</th>
+          </tr>
+        </thead>
+        <tbody id="clustersBody">
+          <tr><td colspan="7">Загрузка…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    
+    <section class="zones" aria-label="Зоны показов">
+      <div class="zone-grid">
+        <div class="zone-card" id="zone-total">
+          <div class="zone-title">Итого</div>
+          <div class="zone-metrics">
+            <div><span class="k">Показы</span><span class="v" id="z-total-shows">—</span></div>
+            <div><span class="k">Клики</span><span class="v" id="z-total-clicks">—</span></div>
+            <div><span class="k">CTR</span><span class="v" id="z-total-ctr">—</span></div>
+            <div><span class="k">CPC</span><span class="v" id="z-total-cpc">—</span></div>
+            <div><span class="k">Затраты</span><span class="v" id="z-total-cost">—</span></div>
+          </div>
+        </div>
+        <div class="zone-card" id="zone-search">
+          <div class="zone-title">Поиск</div>
+          <div class="zone-metrics">
+            <div><span class="k">Показы</span><span class="v" id="z-search-shows">—</span></div>
+            <div><span class="k">Клики</span><span class="v" id="z-search-clicks">—</span></div>
+            <div><span class="k">CTR</span><span class="v" id="z-search-ctr">—</span></div>
+            <div><span class="k">CPC</span><span class="v" id="z-search-cpc">—</span></div>
+            <div><span class="k">Затраты</span><span class="v" id="z-search-cost">—</span></div>
+          </div>
+        </div>
+        <div class="zone-card" id="zone-catalog">
+          <div class="zone-title">Каталог</div>
+          <div class="zone-metrics">
+            <div><span class="k">Показы</span><span class="v" id="z-catalog-shows">—</span></div>
+            <div><span class="k">Клики</span><span class="v" id="z-catalog-clicks">—</span></div>
+            <div><span class="k">CTR</span><span class="v" id="z-catalog-ctr">—</span></div>
+            <div><span class="k">CPC</span><span class="v" id="z-catalog-cpc">—</span></div>
+            <div><span class="k">Затраты</span><span class="v" id="z-catalog-cost">—</span></div>
+          </div>
+        </div>
+        <div class="zone-card" id="zone-shelves">
+          <div class="zone-title">Полки</div>
+          <div class="zone-metrics">
+            <div><span class="k">Показы</span><span class="v" id="z-shelves-shows">—</span></div>
+            <div><span class="k">Клики</span><span class="v" id="z-shelves-clicks">—</span></div>
+            <div><span class="k">CTR</span><span class="v" id="z-shelves-ctr">—</span></div>
+            <div><span class="k">CPC</span><span class="v" id="z-shelves-cpc">—</span></div>
+            <div><span class="k">Затраты</span><span class="v" id="z-shelves-cost">—</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <footer class="statusbar">
+      <div id="status">Готово</div>
+      <div><button id="exportBtn" class="btn">Экспорт CSV</button></div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

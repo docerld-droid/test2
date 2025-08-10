@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sentry.wb.ru/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "image",
+        "ping",
+        "other"
+      ]
+    }
+  }
+]

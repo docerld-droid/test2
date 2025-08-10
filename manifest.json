@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "WB Реклама. Дорого",
+  "version": "4.3.1",
+  "description": "Иконки, анимации, светлая/тёмная тема, улучшения цветов и верстки.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": [
+    "cookies",
+    "declarativeNetRequest",
+    "scripting",
+    "storage",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://*.wildberries.ru/*",
+    "https://cmp.wildberries.ru/*",
+    "https://seller.wildberries.ru/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://cmp.wildberries.ru/campaigns/edit/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "app.html",
+        "app.js",
+        "app.css",
+        "page-bridge.js"
+      ],
+      "matches": [
+        "https://cmp.wildberries.ru/*"
+      ]
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "rules_1",
+        "enabled": true,
+        "path": "rules_1.json"
+      }
+    ]
+  }
+}
