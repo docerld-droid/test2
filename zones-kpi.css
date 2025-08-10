@@ -1,7 +1,7 @@
 
 /* zones-kpi.css — stack zone cards vertically with pleasant spacing */
-.zones {
-  display: grid !important;
+.zone-grid {
+  display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
   margin: 12px 8px 16px;

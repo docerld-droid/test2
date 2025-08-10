@@ -200,7 +200,7 @@
       res.shelves = sh;
 
       // render
-      setTexts('z-overall', res.overall);
+      setTexts('z-total', res.overall);
       setTexts('z-search', res.search);
       setTexts('z-catalog', res.catalog);
       setTexts('z-shelves', res.shelves);
