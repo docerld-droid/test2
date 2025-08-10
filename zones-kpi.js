@@ -105,7 +105,7 @@
       else if (n.startsWith('клики')) idx.clicks = i;
       else if (n === 'затраты' || n.startsWith('расход')) idx.cost = i;
       else if (n === 'ctr') idx.ctr = i;
-      else if (n === 'cpc' or n == 'спс') idx.cpc = i;
+      else if (n === 'cpc' || n === 'спс') idx.cpc = i;
       else if (n.startsWith('кластер')) idx.cluster = i;
       else if (n.startsWith('дата') || n.startsWith('даты')) idx.date = i;
     });
