@@ -11,12 +11,12 @@ function showProgress(on){
       bar.style.width = "100%";
       setTimeout(()=>{ if (bar) bar.style.width = "0%"; }, 400);
     }
+  }catch(e){}
+}
 
 // Minimal DOM helpers available globally early
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  }catch(e){}
-}
 
 
 // --- Theme presets ---
@@ -64,12 +64,21 @@ function initTheme(){
   const $ = (s)=>document.querySelector(s);
   const $$ = (s)=>Array.from(document.querySelectorAll(s));
 
-  const state = { tab:"all", search:"", filters:{showsMin:null,showsMax:null,clicksMin:null,clicksMax:null,ctrMin:null,ctrMax:null,cpcMin:null,cpcMax:null,costMin:null,costMax:null}, clusters:[], excluded:new Set(), selected:new Set(), from:null, to:null, advertID:null, clusterDict:null, statRows:null };
+  const state = { tab:"all", search:"", filters:{showsMin:null,showsMax:null,clicksMin:null,clicksMax:null,ctrMin:null,ctrMax:null,cpcMin:null,cpcMax:null,costMin:null,costMax:null}, clusters:[], excluded:new Set(), selected:new Set(), from:null, to:null, advertID:null, clusterDict:null, statRows:null, zones:null };
   let loadInFlight = false;
   let loadQueued = false;
 
   let serverExcludedReady = false;  // true после успешного fetchExcludedFromWB()
   let lastServerExcludedCount = 0;
+
+  document.addEventListener('wbZonesKPI', ev => {
+    try{
+      const d = ev.detail || {};
+      console.debug('[WB-EXT] wbZonesKPI event', d);
+      state.zones = d;
+      updateZones();
+    }catch(e){}
+  });
 
   
 async function ensureServerSync(advertID){
@@ -1101,10 +1110,16 @@ async function parseTotalsAndCatalogXLSX(buf){
 
 function computeSearchTotals(){
   const items = (state && state.clusters) ? state.clusters : [];
+  console.debug('[WB-EXT] computeSearchTotals items', items.length);
   const agg = {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-  for (const c of items){ agg.shows += c.shows||0; agg.clicks += c.clicks||0; agg.cost += c.cost||0; }
+  for (const c of items){
+    agg.shows += c.shows||0;
+    agg.clicks += c.clicks||0;
+    agg.cost += c.cost||0;
+  }
   agg.ctr = agg.shows ? agg.clicks/agg.shows : 0;
   agg.cpc = agg.clicks ? agg.cost/agg.clicks : 0;
+  console.debug('[WB-EXT] computeSearchTotals result', agg);
   return agg;
 }
 
@@ -1119,22 +1134,20 @@ function fillZoneCard(prefix, m){
 
 function updateZones(){
   try{
-    const search = computeSearchTotals();
-    const total = state.zonesTotal || null;
-    const catalog = state.zonesCatalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-    let shelves = {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
-    if (total){
-      shelves.shows = Math.max(0,(total.shows||0)-(search.shows||0)-(catalog.shows||0));
-      shelves.clicks= Math.max(0,(total.clicks||0)-(search.clicks||0)-(catalog.clicks||0));
-      shelves.cost  = Math.max(0,(total.cost||0)-(search.cost||0)-(catalog.cost||0));
-      shelves.ctr   = shelves.shows ? shelves.clicks/shelves.shows : 0;
-      shelves.cpc   = shelves.clicks ? shelves.cost/shelves.clicks : 0;
-      fillZoneCard('total', total);
-    } else {
-      fillZoneCard('total', {shows:0, clicks:0, cost:0, ctr:0, cpc:0});
-    }
+    const z = state.zones || {};
+    console.debug('[WB-EXT] updateZones raw state.zones', z);
+    const search  = z.search  || computeSearchTotals();
+    const catalog = z.catalog || {shows:0, clicks:0, cost:0, ctr:0, cpc:0};
+    const total   = z.total   || {
+      shows: (search.shows||0) + (catalog.shows||0),
+      clicks:(search.clicks||0) + (catalog.clicks||0),
+      cost:  (search.cost||0) + (catalog.cost||0)
+    };
+    total.ctr = total.shows ? total.clicks/total.shows : 0;
+    total.cpc = total.clicks ? total.cost/total.clicks : 0;
+    fillZoneCard('total',   total);
     fillZoneCard('search',  search);
     fillZoneCard('catalog', catalog);
-    fillZoneCard('shelves', shelves);
+    console.debug('[WB-EXT] updateZones totals',{search,total,catalog});
   }catch(e){ /* ignore */ }
 }
