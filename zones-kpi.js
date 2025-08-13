@@ -105,7 +105,7 @@
       else if (n.startsWith('клики')) idx.clicks = i;
       else if (n === 'затраты' || n.startsWith('расход')) idx.cost = i;
       else if (n === 'ctr') idx.ctr = i;
-      else if (n === 'cpc' or n == 'спс') idx.cpc = i;
+      else if (n === 'cpc' || n === 'спс') idx.cpc = i;
       else if (n.startsWith('кластер')) idx.cluster = i;
       else if (n.startsWith('дата') || n.startsWith('даты')) idx.date = i;
     });
@@ -200,7 +200,7 @@
       res.shelves = sh;
 
       // render
-      setTexts('z-overall', res.overall);
+      setTexts('z-total', res.overall);
       setTexts('z-search', res.search);
       setTexts('z-catalog', res.catalog);
       setTexts('z-shelves', res.shelves);
